@@ -140,7 +140,8 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_hello\
-	$U/_freemem
+	$U/_freemem\
+	$U/_touch
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
