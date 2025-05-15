@@ -91,3 +91,12 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// return how many free mem in bytes.
+extern uint64 kfreemem(void);
+
+uint64
+sys_freemem(void)
+{
+  return kfreemem();
+}
