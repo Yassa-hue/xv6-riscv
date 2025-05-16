@@ -23,6 +23,7 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int freemem(void);
+int mmap(int fd, uint64 length);
 
 // ulib.c
 int stat(const char*, struct stat*);

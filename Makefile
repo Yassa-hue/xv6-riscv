@@ -141,7 +141,8 @@ UPROGS=\
 	$U/_zombie\
 	$U/_hello\
 	$U/_freemem\
-	$U/_touch
+	$U/_touch\
+	$U/_mmaptest
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
