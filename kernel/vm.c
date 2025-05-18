@@ -1,10 +1,13 @@
-#include "param.h"
 #include "types.h"
+#include "param.h"
 #include "memlayout.h"
-#include "elf.h"
 #include "riscv.h"
-#include "defs.h"
+#include "spinlock.h"
+#include "sleeplock.h"
 #include "fs.h"
+#include "file.h"
+#include "proc.h" 
+#include "defs.h"
 
 /*
  * the kernel's page table.
@@ -448,4 +451,64 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+int
+handle_page_read_fault(pagetable_t pagetable, struct mmapt *mmap, uint64 fault_addr)
+{
+  if (!mmap || !mmap->f)  // Validate mapping exists
+    return -1;
+
+  // Check fault is within mmap range
+  if (fault_addr < mmap->addr || fault_addr >= mmap->addr + mmap->length)
+    return -1;
+
+  // If already mapped, just verify permissions
+  if (mmap->mapped) {
+    pte_t *pte = walk(pagetable, PGROUNDDOWN(fault_addr), 0);
+    if (!pte || !(*pte & PTE_R) || (*pte & PTE_W)) // Enforce read-only
+      return -1;
+    return 0;
+  }
+
+  ilock(mmap->f->ip);
+
+  // Allocate and map ALL pages read-only
+  for (uint64 offset = 0; offset < mmap->length; offset += PGSIZE) {
+    char *mem = kalloc();
+    if (!mem) {
+      // Cleanup any already allocated pages
+      for (uint64 cleanup_offset = 0; cleanup_offset < offset; cleanup_offset += PGSIZE) {
+        uint64 pa = walkaddr(pagetable, mmap->addr + cleanup_offset);
+        if (pa) {
+          uvmunmap(pagetable, mmap->addr + cleanup_offset, 1, 0);
+          kfree((void*)pa);
+        }
+      }
+      iunlock(mmap->f->ip);
+      return -1;
+    }
+
+    memset(mem, 0, PGSIZE);
+    int n = readi(mmap->f->ip, 0, (uint64)mem, offset, PGSIZE);
+    if (n < 0 || 
+        mappages(pagetable, mmap->addr + offset, PGSIZE, (uint64)mem, 
+                PTE_R | PTE_U) < 0) {  // Only R+U bits set
+      kfree(mem);
+      // Cleanup previous allocations
+      for (uint64 cleanup_offset = 0; cleanup_offset < offset; cleanup_offset += PGSIZE) {
+        uint64 pa = walkaddr(pagetable, mmap->addr + cleanup_offset);
+        if (pa) {
+          uvmunmap(pagetable, mmap->addr + cleanup_offset, 1, 0);
+          kfree((void*)pa);
+        }
+      }
+      iunlock(mmap->f->ip);
+      return -1;
+    }
+  }
+
+  iunlock(mmap->f->ip);
+  mmap->mapped = 1;
+  return 0;
 }

@@ -79,6 +79,13 @@ struct trapframe {
   /* 280 */ uint64 t6;
 };
 
+struct mmapt {
+  uint64 addr;                 // virtual address
+  uint64 length;               // total length
+  struct file *f;              // backing file
+  int mapped;                  // 1 if memory has been allocated and mapped
+};
+
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
@@ -104,4 +111,5 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct mmapt mmapt;          // mmap table
 };

@@ -517,47 +517,22 @@ sys_mmap(void)
   argint(1, &len);
   length = (uint64)len;
 
-  if (fd < 0 || length <= 0)
+  if (fd < 0 || length <= 0 || p->mmapt.f != 0)
     return -1;
 
-  if (fd >= NOFILE || (f = p->ofile[fd]) == 0)
-    return -1;
-
-  if (!f->readable || f->ip == 0)
+  if (fd >= NOFILE || (f = p->ofile[fd]) == 0 || !f->readable || f->ip == 0)
     return -1;
 
   length = PGROUNDUP(length);
   va = PGROUNDUP(p->sz);
+  p->sz = va + length;
 
-  ilock(f->ip);
-  for (uint64 off = 0; off < length; off += PGSIZE) {
-    char *mem = kalloc();
-    if (!mem) {
-      iunlock(f->ip);
-      // Ideally free previously allocated pages here (left as exercise)
-      return -1;
-    }
+  p->mmapt.addr = va;
+  p->mmapt.length = length;
+  p->mmapt.f = f;
+  p->mmapt.mapped = 0;
 
-    memset(mem, 0, PGSIZE);
-
-    int n = readi(f->ip, 0, (uint64)mem, off, PGSIZE);
-    if (n < 0) {
-      kfree(mem);
-      iunlock(f->ip);
-      return -1;
-    }
-
-    if (mappages(p->pagetable, va + off, PGSIZE, (uint64)mem, PTE_R | PTE_U | PTE_V) < 0) {
-      kfree(mem);
-      iunlock(f->ip);
-      return -1;
-    }
-
-    p->sz = va + off + PGSIZE;
-  }
-  iunlock(f->ip);
-
-  sfence_vma(); // flush TLB to reflect new mappings
+  filedup(f); // Increase ref count to prevent file from being closed
 
   return va;
 }

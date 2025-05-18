@@ -67,6 +67,17 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if (r_scause() == 13) {
+    // read page fault
+    // catch it to implement lazy page allocation
+    // for now it's only for MMF
+
+    uint64 fault_addr = r_stval();
+    struct proc *p = myproc();
+    if (handle_page_read_fault(p->pagetable, &p->mmapt, fault_addr) < 0) {
+      printf("page fault at 0x%lx\n", fault_addr);
+      setkilled(p);
+    }
   } else {
     printf("usertrap(): unexpected scause 0x%lx pid=%d\n", r_scause(), p->pid);
     printf("            sepc=0x%lx stval=0x%lx\n", r_sepc(), r_stval());
